@@ -1,5 +1,5 @@
 #include <iostream>
-#include "lexer.h"
+#include "lexer/lexer.h"
 
 using namespace std;
 using namespace gash;
