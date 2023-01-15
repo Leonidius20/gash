@@ -12,7 +12,7 @@ namespace gash {
     };
 
     class command : public tree_node {
-
+         // virt. method to apply cin and cout from other commands
     };
 
     class simple_command : public command {
