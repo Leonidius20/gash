@@ -7,7 +7,7 @@ namespace gash {
 
     class interpreter : public visitor {
     public:
-        int visit(const std::unique_ptr<command>& node) override;
+        int visit(const std::unique_ptr<simple_command>& node) override;
     };
 
     void printErrorForCommand(const std::string& message, const std::string& pathname, bool useErrno);

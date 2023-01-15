@@ -11,7 +11,7 @@ namespace gash {
     // value returned if unable to launch program
     const int ERROR_VALUE = 127;
 
-    int interpreter::visit(const unique_ptr<command> &node) {
+    int interpreter::visit(const unique_ptr<simple_command> &node) {
         __pid_t new_proc_pid = fork();
         if (new_proc_pid < 0) {
             // failed to create child process
@@ -69,7 +69,7 @@ namespace gash {
     }
 
     void printErrorForCommand(const std::string& message, const std::string& pathname, bool useErrno) {
-        cerr << "gash / command runner: Error for command " << pathname << ": "
+        cerr << "gash / simple_command runner: Error for simple_command " << pathname << ": "
             << message;
         if (useErrno) {
             cerr << " (" << strerror(errno) << ")";
