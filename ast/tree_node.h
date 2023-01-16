@@ -60,7 +60,7 @@ namespace gash {
         explicit group_command(std::vector< std::unique_ptr<expression> > exprs)
                 : expressions(std::move(exprs)) {};
 
-        [[nodiscard]] const std::vector< std::unique_ptr<expression> >& getExpressions() const {
+        [[nodiscard]] const std::vector< std::unique_ptr<expression> >& get_expressions() const {
             return expressions;
         };
     };
@@ -71,7 +71,7 @@ namespace gash {
     public:
         explicit pipeline(std::vector< std::unique_ptr<command> > cmds) : commands(std::move(cmds)) {};
 
-        [[nodiscard]] const std::vector< std::unique_ptr<command> >& getCommands() const {
+        [[nodiscard]] const std::vector< std::unique_ptr<command> >& get_commands() const {
             return commands;
         };
     };

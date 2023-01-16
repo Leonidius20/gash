@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cstring>
+#include <vector>
 
-#include <sys/wait.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -13,22 +13,21 @@ using namespace std;
 
 namespace gash {
 
-    struct prog_descr {
-        const char *name;
-        char **argv;
-        pid_t pid;
-    };
-
     int interpreter::visit(const unique_ptr<pipeline> &node) {
         // build a pipeline and run programs here too?
 
-        struct sigaction act;
-        int read_fd, pipe_fd[2];
-        bool first, last;
-        act.sa_handler = SIG_IGN;
-        act.sa_flags = 0;
-        if (sigemptyset(&act.sa_mask) < 0)
-            exit_err("pipeline_run: sigemptyset()");
+
+
+        // I added this
+        vector<__pid_t> child_proc_ids;
+        int pipe_descriptors[2]; // [0] - read end, [1] - write end
+
+        struct sigaction sigpipe_action{};
+        sigpipe_action.sa_handler = SIG_IGN; // ignore signal
+        sigpipe_action.sa_flags = 0;
+        if (sigemptyset(&sigpipe_action.sa_mask) < 0) {
+            throw runtime_error("pipeline runner: sigemptyset() failed");
+        }
 
         /*
          * Функція pipeline_run() у циклі запускає кожну програму конвеєра.
@@ -89,69 +88,156 @@ namespace gash {
             результат буде таким самим.
 
          */
-        for (first = true; descr->name != NULL; first = false, ++descr) {
-            last = (descr + 1)->name == NULL; // is this the last program in pipe?
 
-            // if unable to create pipe
-            if (!last && pipe(pipe_fd) < 0) {
-                if (errno != EMFILE && errno != ENFILE)
-                    exit_err("pipeline_run: pipe()");
-                warn_err("pipeline_run: pipe()");
-                if (!first && close(read_fd) < 0) // if not first in pipe, close the read end
-                    exit_err("pipeline_run: close()");
-                descr->pid = -1;
-                break;
-            }
-            descr->pid = fork(); // create child process
 
-            // if error while forking, close everything
-            if (descr->pid < 0) {
-                warn_err("pipeline_run: fork()");
-                if ((!first && close(read_fd) < 0) ||
-                    (!last && (close(pipe_fd[0]) < 0 || close(pipe_fd[1]) < 0))
-                        ) {
-                    exit_err("pipeline_run: close()");
-                }
-                break;
-            }
+        int prev_read_fd; // descriptor of the read end of pipe from the previous iteration
 
-            // if we are in the child process
-            if (descr->pid > 0) {
-                if ((!first && close(read_fd) < 0) || // close extra descriptors
-                    (!last && close(pipe_fd[1]) < 0)
-                        ) {
-                    exit_err("pipeline_run: close()");
-                }
-                read_fd = pipe_fd[0];
-            } else { // if we are parent process
-                if (sigaction(SIGPIPE, &act, NULL) < 0)      // set to ignore SIGPIPE singnals?
-                    _exit_err("pipeline_run: sigaction()");
-                if (!last && close(pipe_fd[0]) < 0)
-                    _exit_err("pipeline_run: close()");
-                if (!first && read_fd != STDIN_FILENO) {
-                    if (!last && pipe_fd[1] == STDIN_FILENO) {
-                        pipe_fd[1] = dup(pipe_fd[1]);
-                        if (pipe_fd[1] < 0)
-                            _exit_err("pipeline_run: dup()");
+        const vector<unique_ptr<command>> &commands = node->get_commands();
+        for (auto cmd = commands.begin(); cmd != commands.end(); cmd++) {
+            bool isFirst = cmd == commands.begin();
+            bool isLast = cmd == commands.end() - 1;
+
+            // create a new pipe if this is not the last program in the pipeline
+            if (!isLast) {
+                if (pipe(pipe_descriptors) < 0) {
+                    // failed to create a pipe
+                    if (!isFirst) {
+                        close(prev_read_fd); // may fail but we are throwing an exception later anyway
                     }
-                    if (dup2(read_fd, STDIN_FILENO) < 0)
-                        _exit_err("pipeline_run: dup2()");
-                    if (close(read_fd) < 0)
-                        _exit_err("pipeline_run: close()");
+
+                    if (errno == EMFILE || errno == ENFILE) {
+                        // not enough descriptors to use
+                        throw runtime_error(string("Error in pipeline runner: not enough descriptors (") + strerror(errno) + ")");
+                    } else {
+                        throw runtime_error(string("Error in pipeline runner: ") + strerror(errno) + ")");
+                    }
                 }
-                if (!last && pipe_fd[1] != STDOUT_FILENO) {
-                    if (dup2(pipe_fd[1], STDOUT_FILENO) < 0)
-                        _exit_err("pipeline_run: dup2()");
-                    if (close(pipe_fd[1]) < 0)
-                        _exit_err("pipeline_run: close()");
+            }
+
+            __pid_t child_pid = fork();
+
+            if (child_pid < 0) {
+                // error while forking. close descriptors
+                if (!isFirst) {
+                    close(prev_read_fd);
                 }
-                execvp(descr->name, descr->argv);
-                _exit_err("pipeline_run: execvp() for `%s`", descr->name);
+                if (!isLast) {
+                    close(pipe_descriptors[0]);
+                    close(pipe_descriptors[1]);
+                }
+
+                throw runtime_error(string("Error in pipeline runner: ") + strerror(errno) + ")");
+            }
+
+            if (child_pid > 0) {
+                // we are in parent process
+                child_proc_ids.push_back(child_pid);
+
+                if (!isFirst) {
+                    // close prev read descriptor. At this point it has been already
+                    // duplicated into the child process, so we don't need it here
+                    if (close(prev_read_fd) < 0) {
+                        printErrorForPipeline("when closing descriptor (1)", true);
+                    }
+                }
+
+                if (!isLast) {
+                    // close this iteration's write end descriptor. At this point it has been already
+                    // duplicated into the child process, so we don't need it here
+                    if (close(pipe_descriptors[1]) < 0) {
+                        printErrorForPipeline("when closing descriptor (2)", true);
+                    }
+                }
+
+                // saving this iteration's read end descriptor for the next iteration
+                prev_read_fd = pipe_descriptors[0];
+            } else {
+                // we are in child process
+
+                // ignoring SIGPIPE signals
+                if (sigaction(SIGPIPE, &sigpipe_action, nullptr) < 0) {
+                    // TODO: are throws good from child process? we get to main()
+                    throw runtime_error("pipeline runner: sigaction() failed");
+                }
+
+                if (!isLast) {
+                    // we don't need the read end of this iteration's descriptor, as we will
+                    // be reading from the previous iteration's read end
+                    if (close(pipe_descriptors[0]) < 0) {
+                        printErrorForPipeline("failed to close descriptor (3)", true);
+                    }
+                }
+
+                if (!isFirst) {
+                    // making the prev iteration's read end out STDIN, if it's not already
+
+                    if (prev_read_fd != STDIN_FILENO) {
+                        if (!isLast) {
+                            // if this iteration's write end is assigned to STDIN for whatever reason
+                            if (pipe_descriptors[1] == STDIN_FILENO) {
+                                // create another descriptor for it instead
+                                pipe_descriptors[1] = dup(pipe_descriptors[1]);
+                                if (pipe_descriptors[1] < 0) {
+                                    // that failed
+                                    throw runtime_error("pipeline runner: error duplicating descriptor (1)");
+                                }
+                            }
+                        }
+
+                        // make prev iteration's read end this program's stdin
+                        if (dup2(prev_read_fd, STDIN_FILENO) < 0) {
+                            throw runtime_error("pipeline runner: error building pipe (1)");
+                        }
+
+                        // since the read end of pipe was assigned to STDIN, we don't need the
+                        // other descriptor for it
+                        if (close(prev_read_fd) < 0) {
+                            printErrorForPipeline("error closing descriptor (4)", true);
+                        }
+                    }
+
+                }
+
+                if (!isLast) {
+                    // making this iteration's write end our STDOUT, if it's not already
+                    if (pipe_descriptors[1] != STDOUT_FILENO) {
+                        // make this iteration's write end out STDOUT
+                        if (dup2(pipe_descriptors[1], STDOUT_FILENO) < 0) {
+                            throw runtime_error("pipeline runner: error building pipe (2)");
+                        }
+
+                        // since the write end of this iteration's pipe was assigned to STDOUT,
+                        // we don't need this other descriptor for it anymore
+                        if (close(pipe_descriptors[1]) < 0) {
+                            printErrorForPipeline("error closing descriptor (5)", true);
+                        }
+                    }
+                }
+
+                // TODO: support group commands. Move the descriptor assigning code into
+                // a method of its own, before try_load_program
+                simple_command *s_cmd_ptr = static_cast<simple_command*>((*cmd).get());
+                try_load_program(s_cmd_ptr->get_pathname());
             }
         }
 
-        // todo: iterate again and monitor child procs
+        int return_code;
+        for (__pid_t pid : child_proc_ids) {
+            return_code = monitor_child_process(pid, "");
+        }
 
+        // at this point, return_code should contain the return code of the last program in pipe
+        return return_code;
+    }
+
+    void printErrorForPipeline(const string& message, bool useErrno) {
+        cerr << "gash / pipeline runner: "
+             << message;
+        if (useErrno) {
+            cerr << " (" << strerror(errno) << ")";
+            errno = 0;
+        }
+        cerr << '\n';
     }
 
 }

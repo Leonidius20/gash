@@ -18,5 +18,6 @@ namespace gash {
     int monitor_child_process(int pid, const std::string& pathname);
 
     void printErrorForCommand(const std::string& message, const std::string& pathname, bool useErrno);
+    void printErrorForPipeline(const std::string& message, bool useErrno);
 
 }
