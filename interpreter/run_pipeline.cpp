@@ -8,6 +8,7 @@
 #include <unistd.h> // not all may be needed
 
 #include "interpreter.h"
+#include "../ast/tree_node.h"
 
 using namespace std;
 

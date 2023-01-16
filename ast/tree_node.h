@@ -7,6 +7,8 @@
 #include "visitor.h"
 
 namespace gash {
+    // bc of circular dependency
+    // class visitor;
 
     class tree_node {
     public:
@@ -25,7 +27,7 @@ namespace gash {
         [[nodiscard]] std::string get_pathname() const { return pathname; };
 
         int accept(visitor *visitor) override {
-            visitor->visit(this);
+            return visitor->visit(this);
         };
     };
 
@@ -59,7 +61,7 @@ namespace gash {
         : operator_node(std::move(left), std::move(right)) {};
 
         int accept(visitor *visitor) override {
-            visitor->visit(this);
+            return visitor->visit(this);
         };
     };
 
@@ -70,7 +72,7 @@ namespace gash {
         : operator_node(std::move(left), std::move(right)) {};
 
         int accept(visitor *visitor) override {
-            visitor->visit(this);
+            return visitor->visit(this);
         };
     };
 
@@ -87,7 +89,7 @@ namespace gash {
         };
 
         int accept(visitor *visitor) override {
-            visitor->visit(this);
+            return visitor->visit(this);
         };
     };
 
@@ -102,7 +104,7 @@ namespace gash {
         };
 
         int accept(visitor *visitor) override {
-            visitor->visit(this);
+            return visitor->visit(this);
         };
     };
 
