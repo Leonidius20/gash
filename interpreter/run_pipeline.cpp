@@ -13,7 +13,7 @@ using namespace std;
 
 namespace gash {
 
-    int interpreter::visit(const unique_ptr<pipeline> &node) {
+    int interpreter::visit(pipeline *node) {
         // build a pipeline and run programs here too?
 
 

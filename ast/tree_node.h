@@ -4,11 +4,13 @@
 #include <utility>
 #include <vector>
 #include <memory>
+#include "visitor.h"
 
 namespace gash {
 
     class tree_node {
-
+    public:
+        virtual int accept(visitor *visitor) = 0;
     };
 
     class command : public tree_node {
@@ -21,10 +23,15 @@ namespace gash {
         explicit simple_command(std::string path) : pathname(std::move(path)) {};
 
         [[nodiscard]] std::string get_pathname() const { return pathname; };
+
+        int accept(visitor *visitor) override {
+            visitor->visit(this);
+        };
     };
 
     // can be a pipeline or an operator, It's and abstract class
     class expression : public tree_node {
+    public:
 
     };
 
@@ -34,7 +41,7 @@ namespace gash {
         std::unique_ptr<expression> left_child;
         std::unique_ptr<expression> right_child;
     public:
-        explicit operator_node(std::unique_ptr<expression> left,
+        operator_node(std::unique_ptr<expression> left,
         std::unique_ptr<expression> right)
         : left_child(std::move(left)),
         right_child(std::move(right)) {};
@@ -46,10 +53,25 @@ namespace gash {
     class and_node : public operator_node {
         // children can be other operators or pipelines (aka, expressions)
         // visit()
+    public:
+        and_node(std::unique_ptr<expression> left,
+        std::unique_ptr<expression> right)
+        : operator_node(std::move(left), std::move(right)) {};
+
+        int accept(visitor *visitor) override {
+            visitor->visit(this);
+        };
     };
 
     class or_node : public operator_node {
+    public:
+        or_node(std::unique_ptr<expression> left,
+        std::unique_ptr<expression> right)
+        : operator_node(std::move(left), std::move(right)) {};
 
+        int accept(visitor *visitor) override {
+            visitor->visit(this);
+        };
     };
 
     // same as list
@@ -63,6 +85,10 @@ namespace gash {
         [[nodiscard]] const std::vector< std::unique_ptr<expression> >& get_expressions() const {
             return expressions;
         };
+
+        int accept(visitor *visitor) override {
+            visitor->visit(this);
+        };
     };
 
     class pipeline : public expression {
@@ -73,6 +99,10 @@ namespace gash {
 
         [[nodiscard]] const std::vector< std::unique_ptr<command> >& get_commands() const {
             return commands;
+        };
+
+        int accept(visitor *visitor) override {
+            visitor->visit(this);
         };
     };
 

@@ -8,7 +8,7 @@ using namespace std;
 
 namespace gash {
 
-    int interpreter::visit(const unique_ptr<simple_command> &node) {
+    int interpreter::visit(simple_command *node) {
         __pid_t new_proc_pid = fork();
         if (new_proc_pid < 0) {
             // failed to create child process

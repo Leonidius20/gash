@@ -7,8 +7,11 @@ namespace gash {
 
     class interpreter : public visitor {
     public:
-        int visit(const std::unique_ptr<simple_command>& node) override;
-        int visit(const std::unique_ptr<pipeline>& node) override;
+        int visit(simple_command *node) override;
+        int visit(pipeline *node) override;
+        int visit(group_command *node) override;
+        int visit(or_node *node) override;
+        int visit(and_node *node) override;
     };
 
     // value returned if unable to launch program
