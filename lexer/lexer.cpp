@@ -62,7 +62,7 @@ namespace gash {
     }
 
     bool lexer::is_char_part_of_pathname(char c) {
-        return isalnum(c) || c == '.' || c == '/';
+        return isalnum(c) || c == '.' || c == '/' || c == '_' || c == '-';
     }
 
 

@@ -22,12 +22,13 @@ int main(int argc, char *argv[]) {
     int result = 127;
     try {
         auto tokens = lexer(input).tokenize();
-        auto list_tree_node = parser(std::move(tokens)).parse();
+        parser psr(std::move(tokens));
+        auto list_tree_node = psr.parse();
         interpreter i;
         result = list_tree_node->accept(&i);
         cout << "Exit code: " << result << '\n';
     } catch (const invalid_argument &e) {
-        cerr << e.what() << '\n';
+         cerr << e.what() << '\n';
     }
 
     return result; // TODO: return result?

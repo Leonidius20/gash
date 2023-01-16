@@ -7,8 +7,6 @@
 #include "visitor.h"
 
 namespace gash {
-    // bc of circular dependency
-    // class visitor;
 
     class tree_node {
     public:
@@ -16,7 +14,7 @@ namespace gash {
     };
 
     class command : public tree_node {
-         // virt. method to apply cin and cout from other commands
+         // todo: virt. method to apply cin and cout from other commands
     };
 
     class simple_command : public command {
